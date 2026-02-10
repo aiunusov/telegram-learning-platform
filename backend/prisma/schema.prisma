@@ -1,0 +1,326 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [uuidOssp(map: "uuid-ossp"), pgvector(map: "vector")]
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum LearningState {
+  IDLE
+  LEARNING
+  TESTING
+  SUBMITTING
+  REVIEWING
+  HOMEWORK_PENDING
+  HOMEWORK_SUBMITTED
+  COMPLETED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+enum TestStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AttemptStatus {
+  STARTED
+  SUBMITTED
+  CHECKED
+}
+
+enum HomeworkStatus {
+  SUBMITTED
+  REVIEWED
+  NEEDS_FIX
+  APPROVED
+}
+
+enum ContentType {
+  text
+  link
+  file
+}
+
+model User {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  telegramId String   @unique @map("telegram_id")
+  username   String?
+  firstName  String?  @map("first_name")
+  role       UserRole @default(USER)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  projects          Project[]
+  projectMemberships ProjectMember[]
+  learningSessions  LearningSession[]
+  events            Event[]
+  testAttempts      TestAttempt[]
+  homeworkSubmissions HomeworkSubmission[]
+  homeworkReviews    HomeworkReview[]
+  dailyMetrics      DailyMetric[]
+
+  @@index([telegramId])
+  @@map("users")
+}
+
+model Project {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ownerId     String   @map("owner_id") @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  owner              User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members            ProjectMember[]
+  learningSessions   LearningSession[]
+  events             Event[]
+  knowledgeDocuments KnowledgeDocument[]
+  knowledgeChunks    KnowledgeChunk[]
+  tests              Test[]
+  testAttempts       TestAttempt[]
+  homeworkAssignments HomeworkAssignment[]
+  homeworkSubmissions HomeworkSubmission[]
+  dailyMetrics       DailyMetric[]
+  leaderboardSnapshots LeaderboardSnapshot[]
+
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      UserRole @default(USER)
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+model LearningSession {
+  id             String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId      String        @map("project_id") @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  state          LearningState @default(IDLE)
+  currentTopic   String?       @map("current_topic")
+  currentTestId  String?       @map("current_test_id") @db.Uuid
+  metadata       Json?
+  lastActivityAt DateTime      @default(now()) @map("last_activity_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events  Event[]
+
+  @@index([projectId, userId])
+  @@index([state])
+  @@map("learning_sessions")
+}
+
+model Event {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  sessionId String?  @map("session_id") @db.Uuid
+  type      String
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session LearningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([type, createdAt])
+  @@map("events")
+}
+
+model KnowledgeDocument {
+  id         String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId  String         @map("project_id") @db.Uuid
+  filename   String
+  status     DocumentStatus @default(UPLOADED)
+  storageUrl String         @map("storage_url")
+  metadata   Json?
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chunks  KnowledgeChunk[]
+
+  @@index([projectId])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  text       String
+  metadata   Json?
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("knowledge_chunks")
+}
+
+model Test {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId   String     @map("project_id") @db.Uuid
+  topic       String
+  difficulty  String
+  status      TestStatus @default(DRAFT)
+  spec        Json
+  createdAt   DateTime   @default(now()) @map("created_at")
+  publishedAt DateTime?  @map("published_at")
+
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attempts TestAttempt[]
+
+  @@index([projectId, status])
+  @@map("tests")
+}
+
+model TestAttempt {
+  id         String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId  String        @map("project_id") @db.Uuid
+  userId     String        @map("user_id") @db.Uuid
+  testId     String        @map("test_id") @db.Uuid
+  status     AttemptStatus @default(STARTED)
+  startedAt  DateTime      @default(now()) @map("started_at")
+  finishedAt DateTime?     @map("finished_at")
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  test       Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  submission TestSubmission?
+
+  @@index([userId, testId])
+  @@map("test_attempts")
+}
+
+model TestSubmission {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  attemptId   String   @unique @map("attempt_id") @db.Uuid
+  answers     Json
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  attempt TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  check   TestCheck?
+
+  @@map("test_submissions")
+}
+
+model TestCheck {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  submissionId   String   @unique @map("submission_id") @db.Uuid
+  score          Int
+  passed         Boolean
+  mistakes       Json     @default("[]")
+  feedback       String
+  recommendation String
+  checkedAt      DateTime @default(now()) @map("checked_at")
+
+  submission TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@map("test_checks")
+}
+
+model HomeworkAssignment {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  title       String
+  instructions String
+  dueAt       DateTime? @map("due_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submissions HomeworkSubmission[]
+
+  @@map("homework_assignments")
+}
+
+model HomeworkSubmission {
+  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId    String         @map("project_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  assignmentId String?        @map("assignment_id") @db.Uuid
+  contentType  ContentType    @map("content_type")
+  contentText  String?        @map("content_text")
+  fileUrl      String?        @map("file_url")
+  status       HomeworkStatus @default(SUBMITTED)
+  submittedAt  DateTime       @default(now()) @map("submitted_at")
+
+  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignment HomeworkAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  review     HomeworkReview?
+
+  @@index([projectId, status])
+  @@map("homework_submissions")
+}
+
+model HomeworkReview {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  submissionId String   @unique @map("submission_id") @db.Uuid
+  adminUserId  String   @map("admin_user_id") @db.Uuid
+  score        Int?
+  comment      String
+  reviewedAt   DateTime @default(now()) @map("reviewed_at")
+
+  submission HomeworkSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  admin      User               @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@map("homework_reviews")
+}
+
+model DailyMetric {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      DateTime @db.Date
+  metrics   Json     @default("{}")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, date])
+  @@index([projectId, date])
+  @@map("daily_metrics")
+}
+
+model LeaderboardSnapshot {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  period      String
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  ranking     Json
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, period, startDate])
+  @@map("leaderboard_snapshots")
+}

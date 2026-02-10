@@ -1,0 +1,14 @@
+{
+  "name": "telegram-learning-platform",
+  "private": true,
+  "scripts": {
+    "dev:backend": "pnpm --filter backend dev",
+    "dev:bot": "pnpm --filter bot dev",
+    "dev:mini-app": "pnpm --filter mini-app dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
