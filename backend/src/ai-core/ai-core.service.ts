@@ -127,7 +127,7 @@ export class AiCoreService {
         if (!Array.isArray(data)) return null;
         const results: TestSpec[] = [];
         for (const item of data) {
-          const validated = this.validator.validate(TestSpecSchema, item);
+          const validated = this.validator.validate(TestSpecSchema, item) as TestSpec | null;
           if (!validated) return null;
           results.push(validated);
         }

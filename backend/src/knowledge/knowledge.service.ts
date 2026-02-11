@@ -97,12 +97,13 @@ export class KnowledgeService {
       const sampleText = `Content from document: ${document.filename}`;
       const chunks = this.splitIntoChunks(sampleText, 500);
 
-      for (const chunkText of chunks) {
+      for (let i = 0; i < chunks.length; i++) {
         await this.prisma.knowledgeChunk.create({
           data: {
             projectId,
             documentId,
-            text: chunkText,
+            text: chunks[i],
+            chunkIndex: i,
             metadata: { source: document.filename },
           },
         });

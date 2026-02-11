@@ -6,12 +6,14 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [uuidOssp(map: "uuid-ossp"), pgvector(map: "vector")]
+  extensions = [uuid_ossp(map: "uuid-ossp"), vector]
 }
 
 enum UserRole {
   ADMIN
   USER
+
+  @@map("user_role")
 }
 
 enum LearningState {
@@ -23,6 +25,8 @@ enum LearningState {
   HOMEWORK_PENDING
   HOMEWORK_SUBMITTED
   COMPLETED
+
+  @@map("learning_state")
 }
 
 enum DocumentStatus {
@@ -30,18 +34,24 @@ enum DocumentStatus {
   PROCESSING
   INDEXED
   FAILED
+
+  @@map("document_status")
 }
 
 enum TestStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+
+  @@map("test_status")
 }
 
 enum AttemptStatus {
   STARTED
   SUBMITTED
   CHECKED
+
+  @@map("attempt_status")
 }
 
 enum HomeworkStatus {
@@ -49,56 +59,64 @@ enum HomeworkStatus {
   REVIEWED
   NEEDS_FIX
   APPROVED
+
+  @@map("homework_status")
 }
 
 enum ContentType {
   text
   link
   file
+
+  @@map("content_type")
 }
 
 model User {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  telegramId String   @unique @map("telegram_id")
-  username   String?
-  firstName  String?  @map("first_name")
-  role       UserRole @default(USER)
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                  String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  telegramId          String               @unique @map("telegram_id") @db.VarChar(255)
+  username            String?              @db.VarChar(255)
+  firstName           String?              @map("first_name") @db.VarChar(255)
+  role                UserRole             @default(USER)
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  projects          Project[]
-  projectMemberships ProjectMember[]
-  learningSessions  LearningSession[]
-  events            Event[]
-  testAttempts      TestAttempt[]
+  projects            Project[]
+  projectMemberships  ProjectMember[]
+  learningSessions    LearningSession[]
+  events              Event[]
+  testAttempts        TestAttempt[]
   homeworkSubmissions HomeworkSubmission[]
-  homeworkReviews    HomeworkReview[]
-  dailyMetrics      DailyMetric[]
+  homeworkReviews     HomeworkReview[]
+  dailyMetrics        DailyMetric[]
 
-  @@index([telegramId])
+  @@index([role], map: "idx_users_role")
+  @@index([telegramId], map: "idx_users_telegram_id")
   @@map("users")
 }
 
 model Project {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  ownerId     String   @map("owner_id") @db.Uuid
-  name        String
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  id                   String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ownerId              String                @map("owner_id") @db.Uuid
+  name                 String                @db.VarChar(255)
+  description          String?
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  owner              User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  members            ProjectMember[]
-  learningSessions   LearningSession[]
-  events             Event[]
-  knowledgeDocuments KnowledgeDocument[]
-  knowledgeChunks    KnowledgeChunk[]
-  tests              Test[]
-  testAttempts       TestAttempt[]
-  homeworkAssignments HomeworkAssignment[]
-  homeworkSubmissions HomeworkSubmission[]
-  dailyMetrics       DailyMetric[]
+  owner                User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  members              ProjectMember[]
+  learningSessions     LearningSession[]
+  events               Event[]
+  knowledgeDocuments   KnowledgeDocument[]
+  knowledgeChunks      KnowledgeChunk[]
+  tests                Test[]
+  testAttempts         TestAttempt[]
+  homeworkAssignments  HomeworkAssignment[]
+  homeworkSubmissions  HomeworkSubmission[]
+  dailyMetrics         DailyMetric[]
   leaderboardSnapshots LeaderboardSnapshot[]
 
-  @@index([ownerId])
+  @@index([createdAt(sort: Desc)], map: "idx_projects_created_at")
+  @@index([ownerId], map: "idx_projects_owner_id")
   @@map("projects")
 }
 
@@ -106,12 +124,14 @@ model ProjectMember {
   projectId String   @map("project_id") @db.Uuid
   userId    String   @map("user_id") @db.Uuid
   role      UserRole @default(USER)
-  joinedAt  DateTime @default(now()) @map("joined_at")
+  joinedAt  DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([projectId, userId])
+  @@index([role], map: "idx_project_members_role")
+  @@index([userId], map: "idx_project_members_user_id")
   @@map("project_members")
 }
 
@@ -120,178 +140,220 @@ model LearningSession {
   projectId      String        @map("project_id") @db.Uuid
   userId         String        @map("user_id") @db.Uuid
   state          LearningState @default(IDLE)
-  currentTopic   String?       @map("current_topic")
+  currentTopic   String?       @map("current_topic") @db.VarChar(255)
   currentTestId  String?       @map("current_test_id") @db.Uuid
-  metadata       Json?
-  lastActivityAt DateTime      @default(now()) @map("last_activity_at")
-  createdAt      DateTime      @default(now()) @map("created_at")
+  metadata       Json?         @default("{}")
+  lastActivityAt DateTime      @default(now()) @map("last_activity_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   events  Event[]
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId, userId])
-  @@index([state])
+  @@index([lastActivityAt(sort: Desc)], map: "idx_sessions_activity")
+  @@index([projectId, userId], map: "idx_sessions_project_user")
+  @@index([state], map: "idx_sessions_state")
+  @@index([userId], map: "idx_sessions_user_id")
   @@map("learning_sessions")
 }
 
 model Event {
-  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId String   @map("project_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  sessionId String?  @map("session_id") @db.Uuid
-  type      String
-  payload   Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
+  id        String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId String           @map("project_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  sessionId String?          @map("session_id") @db.Uuid
+  type      String           @db.VarChar(100)
+  payload   Json             @default("{}")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  session LearningSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  session LearningSession? @relation(fields: [sessionId], references: [id], onUpdate: NoAction)
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId, createdAt])
-  @@index([type, createdAt])
+  @@index([projectId, createdAt(sort: Desc)], map: "idx_events_project_created")
+  @@index([sessionId], map: "idx_events_session")
+  @@index([type, createdAt(sort: Desc)], map: "idx_events_type_created")
+  @@index([userId, createdAt(sort: Desc)], map: "idx_events_user_created")
   @@map("events")
 }
 
 model KnowledgeDocument {
-  id         String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId  String         @map("project_id") @db.Uuid
-  filename   String
-  status     DocumentStatus @default(UPLOADED)
-  storageUrl String         @map("storage_url")
-  metadata   Json?
-  createdAt  DateTime       @default(now()) @map("created_at")
+  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId    String         @map("project_id") @db.Uuid
+  filename     String         @db.VarChar(500)
+  status       DocumentStatus @default(UPLOADED)
+  storageUrl   String         @map("storage_url")
+  fileSize     Int?           @map("file_size")
+  mimeType     String?        @map("mime_type") @db.VarChar(100)
+  metadata     Json?          @default("{}")
+  errorMessage String?        @map("error_message")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  indexedAt     DateTime?     @map("indexed_at") @db.Timestamptz(6)
 
-  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   chunks  KnowledgeChunk[]
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId])
+  @@index([createdAt(sort: Desc)], map: "idx_knowledge_docs_created")
+  @@index([projectId], map: "idx_knowledge_docs_project")
+  @@index([status], map: "idx_knowledge_docs_status")
   @@map("knowledge_documents")
 }
 
 model KnowledgeChunk {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId  String   @map("project_id") @db.Uuid
-  documentId String   @map("document_id") @db.Uuid
+  id         String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId  String                 @map("project_id") @db.Uuid
+  documentId String                 @map("document_id") @db.Uuid
   text       String
-  metadata   Json?
-  embedding  Unsupported("vector(1536)")?
-  createdAt  DateTime @default(now()) @map("created_at")
+  chunkIndex Int                    @map("chunk_index")
+  metadata   Json?                  @default("{}")
+  embedding  Unsupported("vector")?
+  createdAt  DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId])
+  @@index([documentId], map: "idx_knowledge_chunks_document")
+  @@index([chunkIndex], map: "idx_knowledge_chunks_index")
+  @@index([projectId], map: "idx_knowledge_chunks_project")
   @@map("knowledge_chunks")
 }
 
 model Test {
-  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId   String     @map("project_id") @db.Uuid
-  topic       String
-  difficulty  String
-  status      TestStatus @default(DRAFT)
-  spec        Json
-  createdAt   DateTime   @default(now()) @map("created_at")
-  publishedAt DateTime?  @map("published_at")
+  id             String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId      String     @map("project_id") @db.Uuid
+  topic          String     @db.VarChar(255)
+  difficulty     String     @db.VarChar(50)
+  status         TestStatus @default(DRAFT)
+  spec           Json
+  questionsCount Int?       @default(dbgenerated("jsonb_array_length((spec -> 'questions'::text))")) @map("questions_count")
+  passingScore   Int?       @default(70) @map("passing_score")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  publishedAt    DateTime?  @map("published_at") @db.Timestamptz(6)
 
-  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   attempts TestAttempt[]
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId, status])
+  @@index([createdAt(sort: Desc)], map: "idx_tests_created")
+  @@index([difficulty], map: "idx_tests_difficulty")
+  @@index([projectId, status], map: "idx_tests_project_status")
+  @@index([topic], map: "idx_tests_topic")
   @@map("tests")
 }
 
 model TestAttempt {
-  id         String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId  String        @map("project_id") @db.Uuid
-  userId     String        @map("user_id") @db.Uuid
-  testId     String        @map("test_id") @db.Uuid
-  status     AttemptStatus @default(STARTED)
-  startedAt  DateTime      @default(now()) @map("started_at")
-  finishedAt DateTime?     @map("finished_at")
+  id              String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId       String        @map("project_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  testId          String        @map("test_id") @db.Uuid
+  status          AttemptStatus @default(STARTED)
+  startedAt       DateTime      @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt      DateTime?     @map("finished_at") @db.Timestamptz(6)
+  durationSeconds Int?          @default(dbgenerated("\nCASE\n    WHEN (finished_at IS NOT NULL) THEN (EXTRACT(epoch FROM (finished_at - started_at)))::integer\n    ELSE NULL::integer\nEND")) @map("duration_seconds")
 
-  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  test       Test            @relation(fields: [testId], references: [id], onDelete: Cascade)
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  test       Test            @relation(fields: [testId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   submission TestSubmission?
 
-  @@index([userId, testId])
+  @@index([startedAt(sort: Desc)], map: "idx_test_attempts_started")
+  @@index([status], map: "idx_test_attempts_status")
+  @@index([testId], map: "idx_test_attempts_test")
+  @@index([userId, testId], map: "idx_test_attempts_user_test")
   @@map("test_attempts")
 }
 
 model TestSubmission {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  attemptId   String   @unique @map("attempt_id") @db.Uuid
+  id          String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  attemptId   String      @unique @map("attempt_id") @db.Uuid
   answers     Json
-  submittedAt DateTime @default(now()) @map("submitted_at")
+  submittedAt DateTime    @default(now()) @map("submitted_at") @db.Timestamptz(6)
 
-  attempt TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   check   TestCheck?
+  attempt TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([attemptId], map: "idx_test_submissions_attempt")
   @@map("test_submissions")
 }
 
 model TestCheck {
-  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  submissionId   String   @unique @map("submission_id") @db.Uuid
+  id             String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  submissionId   String         @unique @map("submission_id") @db.Uuid
   score          Int
   passed         Boolean
-  mistakes       Json     @default("[]")
+  mistakes       Json           @default("[]")
   feedback       String
-  recommendation String
-  checkedAt      DateTime @default(now()) @map("checked_at")
+  recommendation String         @db.VarChar(50)
+  strengths      String[]
+  weaknesses     String[]
+  checkedAt      DateTime       @default(now()) @map("checked_at") @db.Timestamptz(6)
 
-  submission TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submission TestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([passed], map: "idx_test_checks_passed")
+  @@index([score], map: "idx_test_checks_score")
+  @@index([submissionId], map: "idx_test_checks_submission")
   @@map("test_checks")
 }
 
 model HomeworkAssignment {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId   String    @map("project_id") @db.Uuid
-  title       String
+  id           String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId    String               @map("project_id") @db.Uuid
+  title        String               @db.VarChar(500)
   instructions String
-  dueAt       DateTime? @map("due_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  dueAt        DateTime?            @map("due_at") @db.Timestamptz(6)
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   submissions HomeworkSubmission[]
 
+  @@index([dueAt], map: "idx_homework_assignments_due")
+  @@index([projectId], map: "idx_homework_assignments_project")
   @@map("homework_assignments")
 }
 
 model HomeworkSubmission {
-  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  projectId    String         @map("project_id") @db.Uuid
-  userId       String         @map("user_id") @db.Uuid
-  assignmentId String?        @map("assignment_id") @db.Uuid
-  contentType  ContentType    @map("content_type")
-  contentText  String?        @map("content_text")
-  fileUrl      String?        @map("file_url")
-  status       HomeworkStatus @default(SUBMITTED)
-  submittedAt  DateTime       @default(now()) @map("submitted_at")
+  id           String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  projectId    String              @map("project_id") @db.Uuid
+  userId       String              @map("user_id") @db.Uuid
+  assignmentId String?             @map("assignment_id") @db.Uuid
+  contentType  ContentType         @map("content_type")
+  contentText  String?             @map("content_text")
+  fileUrl      String?             @map("file_url")
+  fileSize     Int?                @map("file_size")
+  status       HomeworkStatus      @default(SUBMITTED)
+  submittedAt  DateTime            @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignment HomeworkAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   review     HomeworkReview?
+  assignment HomeworkAssignment? @relation(fields: [assignmentId], references: [id], onUpdate: NoAction)
+  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId, status])
+  @@index([assignmentId], map: "idx_homework_submissions_assignment")
+  @@index([projectId, status], map: "idx_homework_submissions_project_status")
+  @@index([submittedAt(sort: Desc)], map: "idx_homework_submissions_submitted")
+  @@index([userId], map: "idx_homework_submissions_user")
   @@map("homework_submissions")
 }
 
 model HomeworkReview {
-  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  submissionId String   @unique @map("submission_id") @db.Uuid
-  adminUserId  String   @map("admin_user_id") @db.Uuid
+  id           String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  submissionId String             @unique @map("submission_id") @db.Uuid
+  adminUserId  String             @map("admin_user_id") @db.Uuid
   score        Int?
   comment      String
-  reviewedAt   DateTime @default(now()) @map("reviewed_at")
+  reviewedAt   DateTime           @default(now()) @map("reviewed_at") @db.Timestamptz(6)
 
-  submission HomeworkSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  admin      User               @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  admin      User               @relation(fields: [adminUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  submission HomeworkSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([adminUserId], map: "idx_homework_reviews_admin")
+  @@index([reviewedAt(sort: Desc)], map: "idx_homework_reviews_reviewed")
+  @@index([submissionId], map: "idx_homework_reviews_submission")
   @@map("homework_reviews")
 }
 
@@ -301,26 +363,31 @@ model DailyMetric {
   userId    String   @map("user_id") @db.Uuid
   date      DateTime @db.Date
   metrics   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([projectId, userId, date])
-  @@index([projectId, date])
+  @@index([date(sort: Desc)], map: "idx_daily_metrics_date")
+  @@index([projectId, date(sort: Desc)], map: "idx_daily_metrics_project_date")
+  @@index([userId, date(sort: Desc)], map: "idx_daily_metrics_user_date")
   @@map("daily_metrics")
 }
 
 model LeaderboardSnapshot {
   id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   projectId   String   @map("project_id") @db.Uuid
-  period      String
+  period      String   @db.VarChar(50)
   startDate   DateTime @map("start_date") @db.Date
   endDate     DateTime @map("end_date") @db.Date
   ranking     Json
-  generatedAt DateTime @default(now()) @map("generated_at")
+  generatedAt DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([projectId, period, startDate])
+  @@index([generatedAt(sort: Desc)], map: "idx_leaderboard_generated")
+  @@index([projectId, period, startDate(sort: Desc)], map: "idx_leaderboard_project_period")
   @@map("leaderboard_snapshots")
 }

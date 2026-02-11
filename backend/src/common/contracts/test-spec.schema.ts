@@ -18,5 +18,5 @@ export const TestSpecSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
-export type Question = z.infer<typeof QuestionSchema>;
-export type TestSpec = z.infer<typeof TestSpecSchema>;
+export type Question = z.output<typeof QuestionSchema>;
+export type TestSpec = z.output<typeof TestSpecSchema>;
