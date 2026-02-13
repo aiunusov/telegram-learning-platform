@@ -114,4 +114,28 @@ export class HomeworkService {
 
     return review;
   }
+
+  /** Create a homework assignment (admin). */
+  async createAssignment(
+    projectId: string,
+    data: { title: string; instructions: string; dueAt?: string },
+  ) {
+    return this.prisma.homeworkAssignment.create({
+      data: {
+        projectId,
+        title: data.title,
+        instructions: data.instructions,
+        dueAt: data.dueAt ? new Date(data.dueAt) : undefined,
+      },
+    });
+  }
+
+  /** List assignments for a project. */
+  async listAssignments(projectId: string) {
+    return this.prisma.homeworkAssignment.findMany({
+      where: { projectId },
+      include: { _count: { select: { submissions: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

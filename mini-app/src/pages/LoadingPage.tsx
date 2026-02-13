@@ -7,14 +7,24 @@ export function LoadingPage() {
   const { authenticate, isAuthenticated, error } = useAuthStore();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/projects');
-      return;
-    }
+    const doAuth = async () => {
+      if (!isAuthenticated) {
+        await authenticate();
+      }
 
-    authenticate().then(() => {
-      navigate('/projects');
-    });
+      const currentUser = useAuthStore.getState().user;
+      if (!currentUser) return;
+
+      if (!currentUser.onboardingCompleted) {
+        navigate('/onboarding');
+      } else if (currentUser.role === 'ADMIN') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
+    };
+
+    doAuth();
   }, []);
 
   if (error) {

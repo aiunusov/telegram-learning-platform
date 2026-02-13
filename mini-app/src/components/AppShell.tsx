@@ -1,15 +1,25 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../store/auth-store';
 
-const navItems = [
-  { path: '/projects', label: 'Проекты', icon: '📁' },
-  { path: '/knowledge', label: 'Материалы', icon: '📚' },
+const studentNavItems = [
+  { path: '/dashboard', label: 'Кабинет', icon: '🏠' },
   { path: '/tests', label: 'Тесты', icon: '✅' },
-  { path: '/analytics', label: 'Аналитика', icon: '📊' },
-  { path: '/homework/review', label: 'Домашки', icon: '📝' },
+  { path: '/homework/submit', label: 'Домашки', icon: '📝' },
+  { path: '/profile', label: 'Профиль', icon: '👤' },
+];
+
+const adminNavItems = [
+  { path: '/admin', label: 'Панель', icon: '📊' },
+  { path: '/admin/students', label: 'Студенты', icon: '👥' },
+  { path: '/knowledge', label: 'Материалы', icon: '📚' },
+  { path: '/homework/review', label: 'Проверка', icon: '📝' },
+  { path: '/profile', label: 'Настройки', icon: '⚙️' },
 ];
 
 export function AppShell() {
   const location = useLocation();
+  const user = useAuthStore((s) => s.user);
+  const navItems = user?.role === 'ADMIN' ? adminNavItems : studentNavItems;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -32,7 +42,7 @@ export function AppShell() {
         }}
       >
         {navItems.map((item) => {
-          const isActive = location.pathname.startsWith(item.path);
+          const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
           return (
             <Link
               key={item.path}

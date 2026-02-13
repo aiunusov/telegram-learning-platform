@@ -9,6 +9,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
 import { HomeworkService } from './homework.service';
 
 @Controller('homework')
@@ -43,6 +44,20 @@ export class HomeworkController {
       status,
     );
     return { submissions };
+  }
+
+  @Post('assignments')
+  @UseGuards(AdminGuard)
+  async createAssignment(
+    @Body() body: { projectId: string; title: string; instructions: string; dueAt?: string },
+  ) {
+    return this.homeworkService.createAssignment(body.projectId, body);
+  }
+
+  @Get('assignments')
+  async listAssignments(@Query('projectId') projectId: string) {
+    const assignments = await this.homeworkService.listAssignments(projectId);
+    return { assignments };
   }
 
   @Post(':submissionId/review')

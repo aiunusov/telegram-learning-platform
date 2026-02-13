@@ -1,12 +1,25 @@
 import { create } from 'zustand';
 import { TelegramAuth } from '../lib/telegram-auth';
 
+interface User {
+  id: string;
+  telegramId: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  position?: string;
+  role: 'ADMIN' | 'USER';
+  onboardingCompleted: boolean;
+  createdAt: string;
+}
+
 interface AuthState {
   isAuthenticated: boolean;
-  user: any | null;
+  user: User | null;
   isLoading: boolean;
   error: string | null;
   authenticate: () => Promise<void>;
+  setUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -32,6 +45,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
       });
     }
+  },
+
+  setUser: (user: User) => {
+    localStorage.setItem('auth_user', JSON.stringify(user));
+    set({ user });
   },
 
   logout: () => {

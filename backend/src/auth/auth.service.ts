@@ -30,19 +30,42 @@ export class AuthService {
   async authenticateTelegram(initData: string) {
     const user = this.validateInitData(initData);
 
+    const adminTelegramIds = (process.env.ADMIN_TELEGRAM_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    const shouldBeAdmin = adminTelegramIds.includes(user.id.toString());
+
     const dbUser = await this.prisma.user.upsert({
       where: { telegramId: user.id.toString() },
       update: {
         username: user.username,
         firstName: user.first_name,
+        role: shouldBeAdmin ? 'ADMIN' : undefined,
       },
       create: {
         telegramId: user.id.toString(),
         username: user.username,
         firstName: user.first_name,
-        role: 'USER',
+        role: shouldBeAdmin ? 'ADMIN' : 'USER',
       },
     });
+
+    // Sync admin role from env on every login
+    if (shouldBeAdmin && dbUser.role !== 'ADMIN') {
+      await this.prisma.user.update({
+        where: { id: dbUser.id },
+        data: { role: 'ADMIN' },
+      });
+      (dbUser as any).role = 'ADMIN';
+    } else if (!shouldBeAdmin && dbUser.role === 'ADMIN') {
+      await this.prisma.user.update({
+        where: { id: dbUser.id },
+        data: { role: 'USER' },
+      });
+      (dbUser as any).role = 'USER';
+    }
 
     const projects = await this.prisma.project.findMany({
       where: {

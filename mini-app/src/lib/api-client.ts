@@ -125,6 +125,58 @@ class ApiClient {
     return data;
   }
 
+  // User Profile
+  async getMe() {
+    const { data } = await this.client.get('/users/me');
+    return data;
+  }
+
+  async updateProfile(params: { firstName?: string; lastName?: string; position?: string }) {
+    const { data } = await this.client.put('/users/profile', params);
+    return data;
+  }
+
+  // Admin: Students
+  async getAllUsers() {
+    const { data } = await this.client.get('/users/all');
+    return data.users;
+  }
+
+  async getStudentStats(userId: string, projectId: string) {
+    const { data } = await this.client.get(`/users/${userId}/stats`, {
+      params: { projectId },
+    });
+    return data;
+  }
+
+  async assignStudentToProject(userId: string, projectId: string) {
+    const { data } = await this.client.post(`/users/${userId}/assign/${projectId}`);
+    return data;
+  }
+
+  async removeStudentFromProject(userId: string, projectId: string) {
+    const { data } = await this.client.delete(`/users/${userId}/assign/${projectId}`);
+    return data;
+  }
+
+  // Homework Assignments
+  async createHomeworkAssignment(params: {
+    projectId: string;
+    title: string;
+    instructions: string;
+    dueAt?: string;
+  }) {
+    const { data } = await this.client.post('/homework/assignments', params);
+    return data;
+  }
+
+  async getHomeworkAssignments(projectId: string) {
+    const { data } = await this.client.get('/homework/assignments', {
+      params: { projectId },
+    });
+    return data.assignments;
+  }
+
   // Analytics
   async getAnalyticsSummary(projectId: string) {
     const { data } = await this.client.get('/analytics/summary', {

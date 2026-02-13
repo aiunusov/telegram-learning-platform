@@ -10,12 +10,14 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AiCoreModule } from './ai-core/ai-core.module';
 import { EventsModule } from './events/events.module';
 import { N8nModule } from './n8n-integration/n8n.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
     PrismaModule,
     AuthModule,
     ProjectsModule,
+    UsersModule,
     RuntimeModule,
     KnowledgeModule,
     TestsModule,
