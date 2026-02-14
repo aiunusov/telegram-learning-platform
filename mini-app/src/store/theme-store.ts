@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type Theme = 'light' | 'dark' | 'system';
+type Theme = 'light' | 'dark';
 
 interface ThemeState {
   theme: Theme;
@@ -10,10 +10,12 @@ interface ThemeState {
 const THEME_KEY = 'app_theme';
 
 function getStoredTheme(): Theme {
-  return (localStorage.getItem(THEME_KEY) as Theme) || 'system';
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === 'light' || stored === 'dark') return stored;
+  return 'light';
 }
 
-const THEME_VARS: Record<string, Record<string, string>> = {
+const THEME_VARS: Record<Theme, Record<string, string>> = {
   dark: {
     '--tg-theme-bg-color': '#1c1c1e',
     '--tg-theme-text-color': '#ffffff',
@@ -35,20 +37,10 @@ const THEME_VARS: Record<string, Record<string, string>> = {
 };
 
 function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  let effective: 'light' | 'dark';
-
-  if (theme === 'system') {
-    const tgColorScheme = (window as any).Telegram?.WebApp?.colorScheme;
-    effective = tgColorScheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  } else {
-    effective = theme;
-  }
-
-  root.setAttribute('data-theme', effective);
+  document.documentElement.setAttribute('data-theme', theme);
 
   // Force CSS variables via inline style to override Telegram SDK injected styles
-  const vars = THEME_VARS[effective];
+  const vars = THEME_VARS[theme];
   Object.entries(vars).forEach(([key, value]) => {
     document.body.style.setProperty(key, value);
   });
