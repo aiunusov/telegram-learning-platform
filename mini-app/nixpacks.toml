@@ -1,12 +1,11 @@
 [phases.setup]
 nixPkgs = ["nodejs_20"]
-cmds = ["npm i -g pnpm@9"]
 
 [phases.install]
-cmds = ["pnpm install"]
+cmds = ["npm install"]
 
 [phases.build]
-cmds = ["pnpm run build"]
+cmds = ["npm run build"]
 
 [start]
 cmd = "npx serve dist -s -l tcp://0.0.0.0:${PORT:-3001}"

@@ -207,6 +207,7 @@ export function ProfilePage() {
         <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Тема оформления</h2>
         <div style={{ display: 'flex', gap: '8px' }}>
           {([
+            { value: 'system' as const, label: 'Авто' },
             { value: 'light' as const, label: 'Светлая' },
             { value: 'dark' as const, label: 'Тёмная' },
           ]).map((opt) => (

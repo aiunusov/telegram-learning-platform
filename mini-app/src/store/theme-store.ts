@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type Theme = 'light' | 'dark';
+type Theme = 'light' | 'dark' | 'system';
 
 interface ThemeState {
   theme: Theme;
@@ -10,41 +10,21 @@ interface ThemeState {
 const THEME_KEY = 'app_theme';
 
 function getStoredTheme(): Theme {
-  const stored = localStorage.getItem(THEME_KEY);
-  if (stored === 'light' || stored === 'dark') return stored;
-  return 'light';
+  return (localStorage.getItem(THEME_KEY) as Theme) || 'system';
 }
 
-const THEME_VARS: Record<Theme, Record<string, string>> = {
-  dark: {
-    '--tg-theme-bg-color': '#1c1c1e',
-    '--tg-theme-text-color': '#ffffff',
-    '--tg-theme-hint-color': '#8e8e93',
-    '--tg-theme-link-color': '#0a84ff',
-    '--tg-theme-button-color': '#0a84ff',
-    '--tg-theme-button-text-color': '#ffffff',
-    '--tg-theme-secondary-bg-color': '#2c2c2e',
-  },
-  light: {
-    '--tg-theme-bg-color': '#ffffff',
-    '--tg-theme-text-color': '#000000',
-    '--tg-theme-hint-color': '#999999',
-    '--tg-theme-link-color': '#007aff',
-    '--tg-theme-button-color': '#007aff',
-    '--tg-theme-button-text-color': '#ffffff',
-    '--tg-theme-secondary-bg-color': '#f5f5f5',
-  },
-};
-
 function applyTheme(theme: Theme) {
-  document.documentElement.setAttribute('data-theme', theme);
+  const root = document.documentElement;
+  let effective: 'light' | 'dark';
 
-  // Force CSS variables via inline style to override Telegram SDK injected styles
-  const vars = THEME_VARS[theme];
-  Object.entries(vars).forEach(([key, value]) => {
-    document.body.style.setProperty(key, value);
-  });
+  if (theme === 'system') {
+    const tgColorScheme = (window as any).Telegram?.WebApp?.colorScheme;
+    effective = tgColorScheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  } else {
+    effective = theme;
+  }
 
+  root.setAttribute('data-theme', effective);
   localStorage.setItem(THEME_KEY, theme);
 }
 
