@@ -1,9 +1,23 @@
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
+function isTelegramEnv(): boolean {
+  try {
+    return !!(window as any).Telegram?.WebApp?.initData;
+  } catch {
+    return false;
+  }
+}
+
 export class TelegramAuth {
   static async authenticate() {
-    // Dynamic import to avoid SSR issues
+    if (isTelegramEnv()) {
+      return this.authenticateViaTelegram();
+    }
+    return this.authenticateViaBrowser();
+  }
+
+  private static async authenticateViaTelegram() {
     const { retrieveLaunchParams } = await import('@telegram-apps/sdk');
     const { initDataRaw } = retrieveLaunchParams();
 
@@ -24,6 +38,31 @@ export class TelegramAuth {
     this.setToken(data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
     return data;
+  }
+
+  private static async authenticateViaBrowser() {
+    // In browser: try to get user profile with existing token
+    const token = this.getToken();
+    if (token) {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_BACKEND_URL}/api/users/me`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (response.ok) {
+          const user = await response.json();
+          localStorage.setItem(USER_KEY, JSON.stringify(user));
+          return { token, user };
+        }
+      } catch {
+        // Token expired or invalid, clear it
+      }
+      this.clearToken();
+    }
+
+    throw new Error(
+      'Откройте приложение через Telegram бота для первой авторизации. После этого оно будет работать и в браузере.',
+    );
   }
 
   static getToken(): string | null {
